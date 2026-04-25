@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "169667568413",
+    "project_id": "live-streaming-app-6f678-c6623",
+    "storage_bucket": "live-streaming-app-6f678-c6623.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:169667568413:android:c84373a6b9116a574b77f4",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0u9OHY7xDZDT3tTo_5jnQts1HqklKwsk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:169667568413:android:738a31459a04e1e74b77f4",
+        "android_client_info": {
+          "package_name": "com.example.live_streaming_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0u9OHY7xDZDT3tTo_5jnQts1HqklKwsk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,65 @@
+name: flutter_application_2
+description: A new Flutter project.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 本地儲存
+  shared_preferences: ^2.2.3
+
+  
+  # 網路請求
+  http: ^1.2.2
+  
+  # 檔案選擇
+  file_picker: ^8.0.0
+  image_picker: ^1.2.1
+  
+  # 狀態管理
+  provider: ^6.1.2
+  
+  # 檔案路徑
+  path_provider: ^2.1.3
+  path: ^1.9.0
+  
+  # 權限處理
+  permission_handler: ^11.0.1
+  
+  # 日誌
+  logger: ^2.3.0
+  
+  # 分享功能
+  share_plus: ^7.2.2
+  
+  # 開啟連結與檔案
+  url_launcher: ^6.3.0
+  open_filex: ^4.4.0
+  
+  # 日期格式化
+  intl: ^0.18.1
+  
+  # Firebase (直播功能)
+  firebase_core: ^3.8.1
+  cloud_firestore: ^5.6.2
+  
+  # 影片播放
+  video_player: ^2.10.1
+  chewie: ^1.13.0
+
+  # 推播通知（新增）
+  firebase_messaging: ^15.1.6
+  flutter_local_notifications: ^18.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
