@@ -765,13 +765,13 @@ class FollowedUser {
 class Post {
   final String id;
   final String userId;
-  final String userName; // 固定顯示全名 (fName)
+  final String userName;
   final String? userAvatar;
   final String content;
   final String? imageUrl;
   int likeCount;
   int commentCount;
-  final DateTime createdAt;
+  final DateTime createdAt; // 存储 UTC 时间
   bool isLiked;
 
   Post({
@@ -793,10 +793,45 @@ class Post {
       imageUrl = '${DatabaseConfig.baseUrl}${DatabaseConfig.projectPath}/uploads/posts/$imageUrl';
     }
 
-    // ── 固定顯示全名：優先 fName，fallback teacherName ──
     final String fullName = (json['fName']?.toString() ?? '').trim();
     final String fallbackName = (json['teacherName']?.toString() ?? '').trim();
     final String resolvedName = fullName.isNotEmpty ? fullName : (fallbackName.isNotEmpty ? fallbackName : '用戶');
+
+    // 將服務器返回的時間字符串解析為 UTC 時間
+    DateTime utcCreatedAt = DateTime.now().toUtc();
+    final String dateStr = json['createDate'] ?? '';
+    if (dateStr.isNotEmpty) {
+      // 嘗試解析 "yyyy-MM-dd HH:mm:ss" 或 "yyyy-MM-ddTHH:mm:ssZ" 等格式
+      try {
+        // 移除可能的毫秒和時區標記，統一處理
+        String cleanStr = dateStr.replaceFirst(RegExp(r'\.\d+'), '').trim();
+        if (cleanStr.endsWith('Z')) {
+          utcCreatedAt = DateTime.parse(cleanStr).toUtc();
+        } else if (cleanStr.contains(' ')) {
+          // 格式如 "2026-04-26 10:00:00"
+          final parts = cleanStr.split(' ');
+          final dateParts = parts[0].split('-');
+          final timeParts = parts[1].split(':');
+          if (dateParts.length == 3 && timeParts.length >= 2) {
+            final year = int.parse(dateParts[0]);
+            final month = int.parse(dateParts[1]);
+            final day = int.parse(dateParts[2]);
+            final hour = int.parse(timeParts[0]);
+            final minute = int.parse(timeParts[1]);
+            final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+            // 強制視為 UTC 時間
+            utcCreatedAt = DateTime.utc(year, month, day, hour, minute, second);
+          } else {
+            utcCreatedAt = DateTime.parse(cleanStr).toUtc();
+          }
+        } else {
+          utcCreatedAt = DateTime.parse(cleanStr).toUtc();
+        }
+      } catch (e) {
+        debugPrint('Error parsing date: $dateStr, $e');
+        utcCreatedAt = DateTime.now().toUtc();
+      }
+    }
 
     return Post(
       id: json['postId']?.toString() ?? '',
@@ -807,7 +842,7 @@ class Post {
       imageUrl: imageUrl,
       likeCount: int.tryParse(json['likeCount']?.toString() ?? '0') ?? 0,
       commentCount: int.tryParse(json['commentCount']?.toString() ?? '0') ?? 0,
-      createdAt: DateTime.tryParse(json['createDate'] ?? '') ?? DateTime.now(),
+      createdAt: utcCreatedAt,
       isLiked: json['isLiked'] == 1 || json['isLiked'] == true,
     );
   }
@@ -819,7 +854,7 @@ class PostCommentFlat {
   final String userId;
   final String userName;
   final String content;
-  final DateTime createDate;
+  final DateTime createDate; // UTC 时间
   int likeCount;
   bool isLiked;
   final String? parentId;
@@ -838,17 +873,48 @@ class PostCommentFlat {
   });
 
   factory PostCommentFlat.fromJson(Map<String, dynamic> json) {
-    // 評論也固定取全名
     final String fullName = (json['fName']?.toString() ?? '').trim();
     final String fallbackName = (json['userName']?.toString() ?? '').trim();
     final String resolvedName = fullName.isNotEmpty ? fullName : (fallbackName.isNotEmpty ? fallbackName : '匿名');
+
+    // 同樣將時間解析為 UTC
+    DateTime utcCreateDate = DateTime.now().toUtc();
+    final String dateStr = json['createDate'] ?? '';
+    if (dateStr.isNotEmpty) {
+      try {
+        String cleanStr = dateStr.replaceFirst(RegExp(r'\.\d+'), '').trim();
+        if (cleanStr.endsWith('Z')) {
+          utcCreateDate = DateTime.parse(cleanStr).toUtc();
+        } else if (cleanStr.contains(' ')) {
+          final parts = cleanStr.split(' ');
+          final dateParts = parts[0].split('-');
+          final timeParts = parts[1].split(':');
+          if (dateParts.length == 3 && timeParts.length >= 2) {
+            final year = int.parse(dateParts[0]);
+            final month = int.parse(dateParts[1]);
+            final day = int.parse(dateParts[2]);
+            final hour = int.parse(timeParts[0]);
+            final minute = int.parse(timeParts[1]);
+            final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+            utcCreateDate = DateTime.utc(year, month, day, hour, minute, second);
+          } else {
+            utcCreateDate = DateTime.parse(cleanStr).toUtc();
+          }
+        } else {
+          utcCreateDate = DateTime.parse(cleanStr).toUtc();
+        }
+      } catch (e) {
+        debugPrint('Error parsing comment date: $dateStr, $e');
+        utcCreateDate = DateTime.now().toUtc();
+      }
+    }
 
     return PostCommentFlat(
       id: json['commentId']?.toString() ?? '',
       userId: json['mId']?.toString() ?? '',
       userName: resolvedName,
       content: json['content'] ?? '',
-      createDate: DateTime.tryParse(json['createDate'] ?? '') ?? DateTime.now(),
+      createDate: utcCreateDate,
       likeCount: int.tryParse(json['likeCount']?.toString() ?? '0') ?? 0,
       isLiked: json['isLiked'] == 1 || json['isLiked'] == true,
       parentId: json['parentId']?.toString(),
@@ -858,7 +924,7 @@ class PostCommentFlat {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PostCard — 單個貼文卡片 (含摺疊式回覆)
+// PostCard — 單個貼文卡片 (含摺疊式回覆) - 已修復時間顯示
 // ═══════════════════════════════════════════════════════════════
 class PostCard extends StatefulWidget {
   final Post post;
@@ -895,12 +961,15 @@ class _PostCardState extends State<PostCard> {
     _commentCount = widget.post.commentCount;
   }
 
+  // ✅ 修復時間顯示：基於 UTC 計算相對時間
   String _formatDate(DateTime date) {
     final lang = Provider.of<LanguageProvider>(context, listen: false);
-    final now = DateTime.now();
-    final diff = now.difference(date);
+    final nowUtc = DateTime.now().toUtc();
+    final diff = nowUtc.difference(date); // date 已經是 UTC
     if (diff.inDays > 7) {
-      return '${date.year}/${date.month}/${date.day}';
+      // 顯示絕對日期，轉換為香港時間顯示
+      final hkTime = date.add(const Duration(hours: 8));
+      return '${hkTime.year}/${hkTime.month}/${hkTime.day}';
     } else if (diff.inDays > 0) {
       return '${diff.inDays}${lang.t('days_ago')}';
     } else if (diff.inHours > 0) {
@@ -1079,8 +1148,6 @@ class _PostCardState extends State<PostCard> {
     }
   }
 
-  // ─── 構建單個評論項目 ───────────────────────────────────────
-  // FIX: 用 Flexible 包裹用戶名與回覆標籤，防止 Row overflow
   Widget _buildCommentItem(
     PostCommentFlat c, {
     required bool isReply,
@@ -1093,7 +1160,6 @@ class _PostCardState extends State<PostCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 頭像
           CircleAvatar(
             radius: isReply ? 12 : 18,
             backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
@@ -1107,12 +1173,10 @@ class _PostCardState extends State<PostCard> {
             ),
           ),
           const SizedBox(width: 10),
-          // 內容區
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── FIX: 用 Row + Flexible 防止 overflow ──
                 Row(
                   children: [
                     Flexible(
@@ -1137,41 +1201,45 @@ class _PostCardState extends State<PostCard> {
                 const SizedBox(height: 2),
                 Text(c.content, style: const TextStyle(fontSize: 13)),
                 const SizedBox(height: 4),
-                Row(children: [
-                  Text(
-                    _formatDate(c.createDate),
-                    style: const TextStyle(color: Colors.grey, fontSize: 11),
-                  ),
-                  const SizedBox(width: 15),
-                  GestureDetector(
-                    onTap: onReply,
-                    child: Text(
-                      lang.t('reply'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: Colors.grey,
+                Row(
+                  children: [
+                    Text(
+                      _formatDate(c.createDate),
+                      style: const TextStyle(color: Colors.grey, fontSize: 11),
+                    ),
+                    const SizedBox(width: 15),
+                    GestureDetector(
+                      onTap: onReply,
+                      child: Text(
+                        lang.t('reply'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
-                  ),
-                ]),
+                  ],
+                ),
               ],
             ),
           ),
-          // 點讚按鈕
-          Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            IconButton(
-              icon: Icon(
-                c.isLiked ? Icons.favorite : Icons.favorite_border,
-                color: c.isLiked ? Colors.red : Colors.grey,
-                size: 18,
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: Icon(
+                  c.isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: c.isLiked ? Colors.red : Colors.grey,
+                  size: 18,
+                ),
+                onPressed: () => _toggleCommentLike(c.id, setModalState),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
-              onPressed: () => _toggleCommentLike(c.id, setModalState),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-            Text('${c.likeCount}', style: const TextStyle(fontSize: 10)),
-          ]),
+              Text('${c.likeCount}', style: const TextStyle(fontSize: 10)),
+            ],
+          ),
         ],
       ),
     );
@@ -1182,20 +1250,21 @@ class _PostCardState extends State<PostCard> {
     return Container(
       color: Colors.grey[100],
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      child: Row(children: [
-        Expanded(
-          child: Text(
-            '${lang.t('replying_to_prefix')} $replyingToUserName',
-            style: const TextStyle(fontSize: 12),
-            overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${lang.t('replying_to_prefix')} $replyingToUserName',
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-        GestureDetector(onTap: onCancel, child: const Icon(Icons.close, size: 16)),
-      ]),
+          GestureDetector(onTap: onCancel, child: const Icon(Icons.close, size: 16)),
+        ],
+      ),
     );
   }
 
-  // ✅ 摺疊式回覆評論區底部彈窗
   void _showIGCommentSheet(BuildContext context, String postId) {
     String? _replyingToId;
     String _replyingToUserName = "";
@@ -1216,142 +1285,138 @@ class _PostCardState extends State<PostCard> {
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Text(
-                    lang.t('comments_title'),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  Padding(
+                    padding: const EdgeInsets.all(15),
+                    child: Text(
+                      lang.t('comments_title'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: FutureBuilder<List<PostCommentFlat>>(
-                    future: _fetchFlatComments(postId),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                        return Center(
-                          child: Text(
-                            lang.t('no_comments'),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                        );
-                      }
+                  const Divider(height: 1),
+                  Expanded(
+                    child: FutureBuilder<List<PostCommentFlat>>(
+                      future: _fetchFlatComments(postId),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Center(
+                            child: Text(
+                              lang.t('no_comments'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          );
+                        }
 
-                      final allComments = snapshot.data!;
-                      final mainComments = allComments
-                          .where((c) =>
-                              c.parentId == null ||
-                              c.parentId == "0" ||
-                              c.parentId!.isEmpty)
-                          .toList();
+                        final allComments = snapshot.data!;
+                        final mainComments = allComments
+                            .where((c) =>
+                                c.parentId == null || c.parentId == "0" || c.parentId!.isEmpty)
+                            .toList();
 
-                      return ListView.builder(
-                        itemCount: mainComments.length,
-                        itemBuilder: (context, index) {
-                          final main = mainComments[index];
-                          final replies =
-                              allComments.where((c) => c.parentId == main.id).toList();
-                          final isExpanded = _expandedCommentIds.contains(main.id);
+                        return ListView.builder(
+                          itemCount: mainComments.length,
+                          itemBuilder: (context, index) {
+                            final main = mainComments[index];
+                            final replies = allComments.where((c) => c.parentId == main.id).toList();
+                            final isExpanded = _expandedCommentIds.contains(main.id);
 
-                          return Column(
-                            children: [
-                              _buildCommentItem(
-                                main,
-                                isReply: false,
-                                onReply: () {
-                                  setModalState(() {
-                                    _replyingToId = main.id;
-                                    _replyingToUserName = main.userName;
-                                  });
-                                },
-                                setModalState: setModalState,
-                              ),
-                              if (replies.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                      left: 72.0, bottom: 8, top: 4),
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setModalState(() {
-                                        if (isExpanded) {
-                                          _expandedCommentIds.remove(main.id);
-                                        } else {
-                                          _expandedCommentIds.add(main.id);
-                                        }
-                                      });
-                                    },
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                            width: 24,
-                                            height: 1,
-                                            color: Colors.grey[300]),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          isExpanded
-                                              ? (lang.t('hide_replies'))
-                                              : (lang.isEnglish
-                                                  ? '—— View ${replies.length} replies'
-                                                  : '—— 查看 ${replies.length} 則回覆'),
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
+                            return Column(
+                              children: [
+                                _buildCommentItem(
+                                  main,
+                                  isReply: false,
+                                  onReply: () {
+                                    setModalState(() {
+                                      _replyingToId = main.id;
+                                      _replyingToUserName = main.userName;
+                                    });
+                                  },
+                                  setModalState: setModalState,
+                                ),
+                                if (replies.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 72.0, bottom: 8, top: 4),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setModalState(() {
+                                          if (isExpanded) {
+                                            _expandedCommentIds.remove(main.id);
+                                          } else {
+                                            _expandedCommentIds.add(main.id);
+                                          }
+                                        });
+                                      },
+                                      child: Row(
+                                        children: [
+                                          Container(width: 24, height: 1, color: Colors.grey[300]),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            isExpanded
+                                                ? (lang.t('hide_replies'))
+                                                : (lang.isEnglish
+                                                    ? '—— View ${replies.length} replies'
+                                                    : '—— 查看 ${replies.length} 則回覆'),
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              if (isExpanded)
-                                ...replies.map(
-                                  (reply) => _buildCommentItem(
-                                    reply,
-                                    isReply: true,
-                                    onReply: () {
-                                      setModalState(() {
-                                        _replyingToId = main.id;
-                                        _replyingToUserName = reply.userName;
-                                      });
-                                    },
-                                    setModalState: setModalState,
+                                if (isExpanded)
+                                  ...replies.map(
+                                    (reply) => _buildCommentItem(
+                                      reply,
+                                      isReply: true,
+                                      onReply: () {
+                                        setModalState(() {
+                                          _replyingToId = main.id;
+                                          _replyingToUserName = reply.userName;
+                                        });
+                                      },
+                                      setModalState: setModalState,
+                                    ),
                                   ),
-                                ),
-                            ],
-                          );
-                        },
-                      );
-                    },
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-                ),
-                if (_replyingToId != null)
-                  _buildReplyIndicator(_replyingToUserName, () {
+                  if (_replyingToId != null)
+                    _buildReplyIndicator(_replyingToUserName, () {
+                      setModalState(() {
+                        _replyingToId = null;
+                        _replyingToUserName = "";
+                      });
+                    }),
+                  _buildCommentInputArea(postId, _replyingToId, () {
                     setModalState(() {
                       _replyingToId = null;
                       _replyingToUserName = "";
                     });
                   }),
-                _buildCommentInputArea(postId, _replyingToId, () {
-                  setModalState(() {
-                    _replyingToId = null;
-                    _replyingToUserName = "";
-                  });
-                }),
-              ]),
+                ],
+              ),
             );
           },
         );
@@ -1361,8 +1426,7 @@ class _PostCardState extends State<PostCard> {
     });
   }
 
-  Widget _buildCommentInputArea(
-      String postId, String? replyingToId, VoidCallback onCommentSuccess) {
+  Widget _buildCommentInputArea(String postId, String? replyingToId, VoidCallback onCommentSuccess) {
     final TextEditingController controller = TextEditingController();
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final lang = Provider.of<LanguageProvider>(context, listen: false);
@@ -1374,69 +1438,61 @@ class _PostCardState extends State<PostCard> {
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
       ),
-      child: Row(children: [
-        Expanded(
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            decoration: InputDecoration(
-              hintText: replyingToId != null
-                  ? lang.t('replying_hint')
-                  : lang.t('add_comment_hint'),
-              border: InputBorder.none,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              decoration: InputDecoration(
+                hintText: replyingToId != null ? lang.t('replying_hint') : lang.t('add_comment_hint'),
+                border: InputBorder.none,
+              ),
             ),
           ),
-        ),
-        TextButton(
-          onPressed: () async {
-            if (controller.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(lang.t('comment_required'))));
-              return;
-            }
-            try {
-              final url =
-                  '${DatabaseConfig.baseUrl}${DatabaseConfig.projectPath}/api/add_comment.php';
-              final body = {
-                'postId': postId,
-                'mId': userProvider.mId,
-                'content': controller.text.trim(),
-              };
-              if (replyingToId != null) body['parentId'] = replyingToId;
-              final response = await http.post(Uri.parse(url), body: body);
-              if (response.statusCode == 200) {
-                final data = jsonDecode(response.body);
-                if (data['success'] == true) {
-                  setState(() => _commentCount++);
-                  widget.onCommentAdded(postId, _commentCount);
-                  focusNode.unfocus();
-                  controller.clear();
-                  onCommentSuccess();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(lang.t('comment_posted_ok')),
-                        backgroundColor: Colors.green),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(data['message'] ?? lang.t('operation_failed')),
-                        backgroundColor: Colors.red),
-                  );
-                }
+          TextButton(
+            onPressed: () async {
+              if (controller.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(lang.t('comment_required'))));
+                return;
               }
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text(lang.t('network_error_retry')),
-                    backgroundColor: Colors.red),
-              );
-            }
-          },
-          child: Text(lang.t('publish_btn'),
-              style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-        ),
-      ]),
+              try {
+                final url = '${DatabaseConfig.baseUrl}${DatabaseConfig.projectPath}/api/add_comment.php';
+                final body = {
+                  'postId': postId,
+                  'mId': userProvider.mId,
+                  'content': controller.text.trim(),
+                };
+                if (replyingToId != null) body['parentId'] = replyingToId;
+                final response = await http.post(Uri.parse(url), body: body);
+                if (response.statusCode == 200) {
+                  final data = jsonDecode(response.body);
+                  if (data['success'] == true) {
+                    setState(() => _commentCount++);
+                    widget.onCommentAdded(postId, _commentCount);
+                    focusNode.unfocus();
+                    controller.clear();
+                    onCommentSuccess();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(lang.t('comment_posted_ok')), backgroundColor: Colors.green),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(data['message'] ?? lang.t('operation_failed')), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(lang.t('network_error_retry')), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: Text(lang.t('publish_btn'), style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1461,29 +1517,31 @@ class _PostCardState extends State<PostCard> {
 
     if (!widget.isLive) return avatar;
 
-    return Stack(clipBehavior: Clip.none, children: [
-      avatar,
-      Positioned(
-        bottom: -3,
-        left: 0,
-        right: 0,
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEF4444),
-              borderRadius: BorderRadius.circular(3),
-              border: Border.all(color: Colors.white, width: 1.2),
-            ),
-            child: const Text(
-              'LIVE',
-              style: TextStyle(
-                  color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        avatar,
+        Positioned(
+          bottom: -3,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(3),
+                border: Border.all(color: Colors.white, width: 1.2),
+              ),
+              child: const Text(
+                'LIVE',
+                style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 
   @override
@@ -1497,150 +1555,183 @@ class _PostCardState extends State<PostCard> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       elevation: 2,
       clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            GestureDetector(
-              onTap: _openUserProfile,
-              child: _buildAvatarWithLive(),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: GestureDetector(
-                onTap: _openUserProfile,
-                behavior: HitTestBehavior.opaque,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Flexible(
-                      child: Text(
-                        widget.post.userName,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (widget.isLive) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444),
-                          borderRadius: BorderRadius.circular(4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ----- 头部：头像 + 用户名/日期 + 更多菜单 -----
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: _openUserProfile,
+                  child: _buildAvatarWithLive(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _openUserProfile,
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.post.userName,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                            if (widget.isLive) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        child: const Text('LIVE',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatDate(widget.post.createdAt),
+                          style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (isOwnPost)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_horiz, color: Colors.grey),
+                    onSelected: (value) {
+                      if (value == 'delete') _deletePost();
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red, size: 20),
+                            SizedBox(width: 8),
+                            Text('删除', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
                       ),
                     ],
-                  ]),
-                  Text(_formatDate(widget.post.createdAt),
-                      style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-                ]),
-              ),
-            ),
-            if (isOwnPost)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_horiz, color: Colors.grey),
-                onSelected: (value) {
-                  if (value == 'delete') _deletePost();
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      const Icon(Icons.delete, color: Colors.red, size: 20),
-                      const SizedBox(width: 8),
-                      Text(lang.t('delete_post'),
-                          style: const TextStyle(color: Colors.red)),
-                    ]),
                   ),
-                ],
-              ),
-          ]),
-        ),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(widget.post.content,
-              style: const TextStyle(fontSize: 15, height: 1.5)),
-        ),
-
-        if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty)
+              ],
+            ),
+          ),
+          // ----- 文字内容 -----
           Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: GestureDetector(
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (_) => Dialog(
-                    child: InteractiveViewer(
-                      child: Image.network(
-                        widget.post.imageUrl!,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.broken_image, size: 100),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              widget.post.content,
+              style: const TextStyle(fontSize: 15, height: 1.5),
+            ),
+          ),
+          // ----- 图片 -----
+          if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => Dialog(
+                      child: InteractiveViewer(
+                        child: Image.network(
+                          widget.post.imageUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 100),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-              child: Image.network(
-                widget.post.imageUrl!,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                  );
+                },
+                child: Image.network(
+                  widget.post.imageUrl!,
                   height: 200,
-                  color: Colors.grey[200],
-                  child: const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                  ),
                 ),
               ),
             ),
+          // ----- 点赞/评论统计 -----
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Text(
+                  '$_likeCount ${lang.t('likes_count')}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  '$_commentCount ${lang.t('comments_count')}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ],
+            ),
           ),
-
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(children: [
-            Text('$_likeCount ${lang.t('likes_count')}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(width: 16),
-            Text('$_commentCount ${lang.t('comments_count')}',
-                style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-          ]),
-        ),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(children: [
-            IconButton(
-              icon: Icon(
-                _isLiked ? Icons.favorite : Icons.favorite_border,
-                color: _isLiked ? Colors.red : Colors.grey,
-                size: 26,
-              ),
-              onPressed: _toggleLike,
+          // ----- 操作按钮行：点赞、评论、分享（分享靠右）-----
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: _isLiked ? Colors.red : Colors.grey,
+                    size: 26,
+                  ),
+                  onPressed: _toggleLike,
+                ),
+                GestureDetector(
+                  onTap: () => _showIGCommentSheet(context, widget.post.id),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.mode_comment_outlined, size: 24, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_commentCount',
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.send_outlined, size: 24),
+                  color: Colors.grey,
+                  onPressed: _sharePost,
+                ),
+              ],
             ),
-            GestureDetector(
-              onTap: () => _showIGCommentSheet(context, widget.post.id),
-              child: Row(children: [
-                const Icon(Icons.mode_comment_outlined, size: 24, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text('$_commentCount',
-                    style: const TextStyle(color: Colors.grey, fontSize: 14)),
-              ]),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.send_outlined, size: 24),
-              color: Colors.grey,
-              onPressed: _sharePost,
-            ),
-          ]),
-        ),
-        const SizedBox(height: 8),
-      ]),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }
