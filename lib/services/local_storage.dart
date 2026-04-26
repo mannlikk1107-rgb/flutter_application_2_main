@@ -7,6 +7,8 @@ class LocalStorage {
   static const String _keyNName = 'nName';
   static const String _keyMType = 'mType';
   static const String _keyEmail = 'email';
+  static const String _keyTel = 'tel';
+  static const String _keyAddress = 'address';
 
   // ── Remember Me keys ──
   static const String _keySavedUsername = 'saved_username';
@@ -16,11 +18,12 @@ class LocalStorage {
   static Future<void> saveUserInfo(Map<String, dynamic> userInfo) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyMId, userInfo['mId']?.toString() ?? '');
-    await prefs.setString(_keyFName, userInfo['fName'] ?? '');
-    await prefs.setString(_keyNName, userInfo['nName'] ?? '');
-    await prefs.setString(_keyMType, userInfo['mType'] ?? 'STUDENT');
-    await prefs.setString(_keyEmail, userInfo['email'] ?? '');
-    await prefs.setBool(_keyIsLoggedIn, true);
+    await prefs.setString(_keyFName, userInfo['fName']?.toString() ?? '');
+    await prefs.setString(_keyNName, userInfo['nName']?.toString() ?? '');
+    await prefs.setString(_keyMType, userInfo['mType']?.toString() ?? 'STUDENT');
+    await prefs.setString(_keyEmail, userInfo['email']?.toString() ?? '');
+    await prefs.setString(_keyTel, userInfo['tel']?.toString() ?? '');
+    await prefs.setString(_keyAddress, userInfo['address']?.toString() ?? '');
   }
 
   static Future<Map<String, String>> getUserInfo() async {
@@ -31,6 +34,8 @@ class LocalStorage {
       'nName': prefs.getString(_keyNName) ?? '',
       'mType': prefs.getString(_keyMType) ?? 'STUDENT',
       'email': prefs.getString(_keyEmail) ?? '',
+      'tel': prefs.getString(_keyTel) ?? '',
+      'address': prefs.getString(_keyAddress) ?? '',
     };
   }
 
